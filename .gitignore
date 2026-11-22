@@ -1,0 +1,14 @@
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+.vscode/
+.idea/
+
+# 8051 Assembler build outputs
+*.hex
+*.obj
+*.lst
+*.m51
+*.lnp
