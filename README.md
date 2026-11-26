@@ -5,7 +5,7 @@
 **Built:** June 2023 (5-person team) · **Analyzed & documented:** 2026<br/>
 **My role:** Led PCB fabrication and soldering for all four boards, co-designed the schematics and layouts, and wrote the 2026 power/thermal analysis and firmware review ([full attribution](CONTRIBUTIONS.md)).
 
-A three-axis claw machine controlled by an AT89S52 (8051-family) microcontroller programmed in assembly. Competition rules banned motor-driver ICs and modules, so the team drove three stepper motors with **three dual H-bridge boards built from 24 discrete TO-220 power transistors** on in-house etched PCBs. In 2026 I revisited the design from first principles and traced a likely contributor to the driver heating to the high-side base drive itself, not only to the closed cabinet.
+A three-axis claw machine controlled by an AT89S52 (8051-family) microcontroller programmed in assembly. Competition rules banned motor-driver ICs and modules, so the team drove three stepper motors with **three dual H-bridge boards built from 24 discrete TO-220 power transistors** on in-house etched PCBs. In 2026 I revisited the design from first principles and traced the driver heating to the bridge's drive scheme itself, not only to the closed cabinet: a cross-coupled low side that cannot saturate, and high-side PNPs that the MCU could not turn off at 15.1 V.
 
 <table>
   <tr>
@@ -23,7 +23,7 @@ A three-axis claw machine controlled by an AT89S52 (8051-family) microcontroller
 ## Engineering Highlights
 
 1. **Discrete power stage under a no-driver-IC rule.** Three identical dual H-bridge boards, each with 4× MJE2955T (PNP, high side) and 4× MJE3055T (NPN, low side) and cross-coupled low-side base drive, run three 1.2 A, 3 Ω bipolar NEMA 17 steppers. The boards were laid out in OrCAD and fabricated in a university PCB lab by UV photolithography, Na₂SiO₃ development, and CuCl₂ spray etching.
-2. **Thermal fix, then a first-principles root-cause analysis.** During extended runs in the closed cabinet, the motors gradually lost torque. The team added heatsinks, a fan, and vents, and the symptom did not recur in subsequent tests or during the competition. In 2026, I traced a likely contributor to driver heating to the high-side PNP base drive: the MCU drove the bases through 1 kΩ resistors without level shifting, even after the motor supply was set to 15.1 V. The analysis predicts partial shoot-through in every powered bridge and MCU pins sinking about 14.4 mA each (Port 2 at 3.8× its sink limit). These figures come from the schematic, bench settings, and datasheets; nothing was measured in 2023.
+2. **Thermal fix, then a first-principles root-cause analysis.** During extended runs in the closed cabinet, the motors gradually lost torque. The team added heatsinks, a fan, and vents, and the symptom did not recur in subsequent tests or during the competition. In 2026, I traced the driver heating to the bridge's drive scheme. The cross-coupled low side would need a current gain of about 330 to switch, so even at the design 5 V more than 40% of the bridge current bypasses the winding; and at 15.1 V, without a level shifter, the MCU cannot turn the high-side PNPs off. Together the six bridges would demand 3–10 A, so the supply's 1.56 A limit almost certainly set the operating point. The estimates come from the schematic, bench settings, datasheets, and a DC circuit model; nothing was measured in 2023.
 3. **Interrupt-driven 8051 assembly control** (team firmware, reviewed by me). Two-phase-on full stepping at about 189 steps/s, an INT0-triggered catch sequence, Timer 0–timed servo pulses, and limit-switch homing with step-count ceilings (255 and 400 cycles).
 4. **Firmware reviewed against the hardware.** Pinout and polarities cross-checked between the assembly source and the OrCAD schematic; hazards such as unsaved registers in the ISR, non-atomic phase writes, energized idle windings, homing timeouts that pass silently, and missing decoupling are documented without changing the 2023 code.
 
@@ -87,7 +87,7 @@ flowchart LR
     HX ==> MX
     HY ==> MY
     HZ ==> MZ
-    PWR -.->|"back-feed into 6.6 V rail<br/>via GPIO clamp diodes<br/>(est. ≈ 7.2 mA per high pin)"| MCU
+    PWR -.->|"back-feed into 6.6 V rail<br/>via GPIO clamp diodes<br/>(est. ≤ 7.2 mA per high pin)"| MCU
 ```
 
 ---
@@ -100,18 +100,18 @@ flowchart LR
 The MCU drives only the two high-side PNP bases (active-low, through 1 kΩ). Each output node drives the opposite low-side NPN through 1 kΩ, so turning on one PNP should also turn on the diagonal NPN and steer current through the winding.
 
 > [!NOTE]
-> **Method.** All figures below are estimates derived from the schematic, the bench-supply settings, component datasheets, and the firmware. No temperatures, currents, or waveforms were measured in 2023.
+> **Method.** All figures below are estimates derived from the schematic, the bench-supply settings, component datasheets, the firmware, and a DC circuit model ([`analysis/hbridge_dc_sim.py`](analysis/hbridge_dc_sim.py)). No temperatures, currents, or waveforms were measured in 2023.
 
 | # | Mechanism | Estimate / evidence | Details |
 | :---: | :--- | :--- | :---: |
-| 1 | High-side PNP cannot turn off | The rail was raised from 5 V (I<sub>B</sub> ≈ 4.3 mA, too little torque) to 15.1 V with no level shifter. A logic-high pin clamps near 7.2 V, so the "off" PNP still draws ≈ 7.2 mA of base current versus 14.4 mA when on. The analysis predicts partial shoot-through in both legs whenever a bridge is powered (magnitude and thermal share unquantified). | [§5.1](docs/thermal_troubleshooting.md#51-the-high-side-pnps-could-not-turn-off) |
-| 2 | MCU pin overstress | ≈ 14.4 mA per low pin (1.4× the 10 mA pin limit); 57.6 mA on Port 2 (3.8× the 15 mA port limit). The MCU also runs unregulated at 6.6 V, its absolute maximum. | [§5.2](docs/thermal_troubleshooting.md#52-mcu-pin-loading-and-logic-supply) |
-| 3 | Power and junction temperature | The supply settings bound motor-rail input at ≤ 23.6 W. For a device assumed to dissipate 1.5 W, estimated T<sub>J</sub> ≈ 134 °C bare versus ≈ 48–60 °C with heatsink and fan (assumed R<sub>θJA</sub>). | [§5.3](docs/thermal_troubleshooting.md#53-power-budget-and-junction-temperature) |
-| 4 | No freewheeling diodes | BJTs have no body diode and none were added, so the winding energy ½LI² at each phase change has no defined path. It must be dissipated across the switches, base networks, wiring, or supply (split unquantified). | [§5.4](docs/thermal_troubleshooting.md#54-no-freewheeling-diodes) |
-| 5 | Firmware drive timing | Bit-by-bit phase writes leave the inputs at `(0, 0)` for 1 µs on about half of the phase changes; the X/Y bridges stay energized between moves. | [§5.5](docs/thermal_troubleshooting.md#55-firmware-contributions) |
+| 1 | Bridge cannot switch cleanly | Each low-side NPN is driven from the opposite output node through 1 kΩ, which needs h<sub>FE</sub> ≈ 330 to saturate into a 3 Ω winding; the model shows 42–45% of the bridge current bypassing the winding even at the design 5 V. At 15.1 V with no level shifter, a logic-high pin clamps near 7.2 V, so the "off" PNP still draws up to ≈ 7.2 mA of base current. The six bridges would demand 3–10 A at 15.1 V, so the 1.56 A supply limit almost certainly held the rail at ≈ 4–10 V. | [§5.1](docs/thermal_troubleshooting.md#51-the-bridge-could-not-switch-cleanly) |
+| 2 | MCU pin overstress | Nominal upper bound at 15.1 V: 14.4 mA per low pin and 57.6 mA on Port 2 (3.8× the 15 mA port limit). At the current-limited operating point the model gives 3–9 mA per pin and 12–36 mA on Port 2 (19–36 mA at idle, up to 2.4×). The MCU also runs unregulated at 6.6 V, its absolute maximum. | [§5.2](docs/thermal_troubleshooting.md#52-mcu-pin-loading-and-logic-supply) |
+| 3 | Power and junction temperature | Hard bound ≤ 23.6 W into the motor rail; the model gives 6–16 W, 0.24–0.64 W per transistor on average and up to ≈ 1.3 W in the hottest. At 1.3 W, T<sub>J</sub> ≈ 121 °C bare (a lower bound) versus ≈ 45–63 °C with heatsink and fan. How the heat caused the torque loss is not established. | [§5.3](docs/thermal_troubleshooting.md#53-power-budget-and-junction-temperature) |
+| 4 | No freewheeling diodes | BJTs have no body diode and none were added, so the winding energy ½LI² at each phase change has no defined path. A voltage-stress and reliability risk; at an estimated 4–23 mW per moving motor it is not a significant heat source. | [§5.4](docs/thermal_troubleshooting.md#54-no-freewheeling-diodes) |
+| 5 | Firmware drive timing | The X/Y bridges stay energized between moves (a continuous load). Bit-by-bit phase writes also leave the inputs at `(0, 0)` for 1 µs on about half of the phase changes, under 0.1% of the time. | [§5.5](docs/thermal_troubleshooting.md#55-firmware-contributions) |
 | 6 | No local decoupling | The schematics and layouts show no VCC bypass capacitor on the MCU and no local bypass or bulk capacitor at the motor-rail input of any H-bridge board; the MCU shares the unregulated 6.6 V rail with the servo. | [§5.6](docs/thermal_troubleshooting.md#56-power-integrity-no-local-decoupling) |
 
-**Proposed redesign** ([§6](docs/thermal_troubleshooting.md#6-proposed-redesign)): MOSFET H-bridges with a half-bridge gate driver (for example IR2104) and dead time, Schottky or fast-recovery freewheeling diodes, local decoupling and DC-link capacitance, low-side shunt sensing with PWM current regulation at 1.2 A, single-instruction phase writes with idle de-energization, and a regulated 5 V MCU rail separated from the servo supply.
+**Proposed redesign** ([§6](docs/thermal_troubleshooting.md#6-proposed-redesign)), in two versions. Within the 2023 no-driver-IC rule: discrete MOSFET H-bridges with a level-shifted P-channel high side, RC dead time, body-diode or Schottky freewheeling, and shunt-based PWM current regulation at 1.2 A. Without the rule: one integrated stepper driver per motor (for example DRV8825 or TMC2209). Both add single-instruction phase writes with idle de-energization, a regulated 5 V MCU rail separated from the servo supply, and local decoupling.
 
 ---
 
@@ -139,7 +139,7 @@ The MCU drives only the two high-side PNP bases (active-low, through 1 kΩ). Eac
 | 21–24 | P2.0–P2.3 | — | Output, active-low* | X-axis H-bridge board (`HEADER 8`); `LEFT` / `RIGHT` / `RLEFT`; stays energized at idle |
 | 25–28 | P2.4–P2.7 | — | Output, active-low* | Y-axis H-bridge board (`HEADER 8`); `FRONT` / `BACK` / `RFRONT`; stays energized at idle |
 
-\*A logic 0 turns the high-side MJE2955T on. On the 15.1 V rail without a level shifter, a logic 1 does not fully turn it off ([analysis](docs/thermal_troubleshooting.md#51-the-high-side-pnps-could-not-turn-off)).<br/>
+\*A logic 0 turns the high-side MJE2955T on. On the 15.1 V rail without a level shifter, a logic 1 does not fully turn it off ([analysis](docs/thermal_troubleshooting.md#51-the-bridge-could-not-switch-cleanly)).<br/>
 †The symbol names are swapped relative to the routines that use them: `RLEFTBTN` (P1.5) ends `RFRONT`, and `RFRONTBTN` (P1.6) ends `RLEFT`. The routines poll the raw bit addresses, so behavior is unaffected.<br/>
 ‡The firmware writes `CLR INFRARED`, which drives this quasi-bidirectional pin low instead of releasing it as an input. Coin detection still worked, most likely because the receiver circuit could overpower the pin's pull-down; this was not measured.
 
@@ -195,6 +195,9 @@ Every function below was demonstrated on the integrated machine during the cours
 ├── CONTRIBUTIONS.md
 ├── src/
 │   └── claw_machine.asm        # 2023 competition firmware (8051 assembly)
+├── analysis/
+│   ├── hbridge_dc_sim.py       # 2026 ngspice DC model of the H-bridges
+│   └── sim_output.txt          # its output, quoted in thermal_troubleshooting.md §5
 └── docs/
     ├── hardware_and_pcb.md
     ├── firmware_and_control.md

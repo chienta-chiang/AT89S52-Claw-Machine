@@ -113,6 +113,7 @@ Each stepper has two windings, each driven by one full H-bridge (4 transistors),
 - The MCU drives only the two **high-side PNP bases** (active-low, through 1 kΩ).
 - Each **output node** drives the **opposite low-side NPN** through 1 kΩ (cross-coupling). When the left PNP pulls OUT A high, OUT A turns on the right NPN, and current flows A → B through the winding.
 - Inputs `(1, 0)` or `(0, 1)` reverse the winding current. `(0, 0)` would turn on both high sides and is unsafe.
+- With these parts the cross-coupled low side cannot fully saturate or turn off (it would need h<sub>FE</sub> ≈ 330), so part of the current bypasses the winding even at the intended 5 V; see [thermal_troubleshooting.md §5.1](thermal_troubleshooting.md#51-the-bridge-could-not-switch-cleanly).
 
 ### Known issues in the drawing and the build
 
@@ -120,8 +121,9 @@ Each stepper has two windings, each driven by one full H-bridge (4 transistors),
 2. **Rail voltage.** The drawing's +5 V rail was run at 15.1 V on the bench with no level shifter, so the PNPs could not be switched off cleanly.
 3. **No freewheeling diodes.** Bipolar transistors have no body diode, and none were added, so winding energy at each step has no defined path and must be dissipated in the switches, base networks, wiring, or supply.
 4. **No capacitors on the driver boards.** The driver schematic and layout show no local bypass or bulk capacitor at the motor-rail input. The resulting rail transients were not measured.
+5. **Cross-coupled low-side drive.** Each low-side NPN takes its base current from the opposite output node through 1 kΩ, so it cannot saturate into a 3 Ω winding with a power BJT's gain.
 
-Items 2–4 are analyzed in [thermal_troubleshooting.md](thermal_troubleshooting.md).
+Items 2–5 are analyzed in [thermal_troubleshooting.md](thermal_troubleshooting.md).
 
 ---
 
@@ -134,7 +136,7 @@ Items 2–4 are analyzed in [thermal_troubleshooting.md](thermal_troubleshooting
 | Coin sensor | LED-940R-5T/R pair | 940 nm IR, 30° beam | Chosen after a photo-interrupter (false triggers from room light) and an SMD micro-switch (light coins did not press it; heavy coins bounced) failed |
 | Control buttons (5×) | 5111 arcade buttons | Snap-action micro-switch, 6 A / 250 VAC | Front, Back, Left, Right, Catch |
 | Limit switches (2×) | 5095 bent-lever micro-switch | 3 A / 125–250 VAC | Home position above the prize chute |
-| Cooling | 24× TO-220 heatsinks, 1× sidewall fan | See [§2](#2-power-distribution) | Added during integration |
+| Cooling | 24× TO-220 heatsinks, 1× sidewall fan | See [§2](#2-power-distribution) | Added during integration; heatsinks attached with pre-applied adhesive thermal pads, no separate insulators |
 
 ---
 

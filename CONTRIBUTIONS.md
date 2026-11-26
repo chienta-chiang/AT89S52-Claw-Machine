@@ -34,7 +34,7 @@ Names and student IDs of teammates and faculty are omitted for privacy.
 | Schematic capture & PCB layout | **Shared** | Drew and reviewed the OrCAD Capture schematics and Layout routing for the main board and the H-bridge driver boards |
 | Thermal retrofit | **Team** | Helped fit the heatsinks, the sidewall fan, and the ventilation openings after the motors weakened in long enclosed runs |
 | Integration & testing | **Team** | Took part in continuity checks, system wiring, three-axis motion and claw tests, limit-switch homing checks, and fixing wiring faults (loose jumpers, common-ground problems, shorts) |
-| 2026 documentation & analysis | **Sole** | This repository: English documentation, diagrams, the annotated H-bridge schematic, the power/thermal analysis in [thermal_troubleshooting.md](docs/thermal_troubleshooting.md), and the firmware review in [firmware_and_control.md](docs/firmware_and_control.md) |
+| 2026 documentation & analysis | **Sole** | This repository: English documentation, diagrams, the annotated H-bridge schematic, the power/thermal analysis in [thermal_troubleshooting.md](docs/thermal_troubleshooting.md) with its ngspice DC model of the H-bridges ([`analysis/`](analysis/hbridge_dc_sim.py)), and the firmware review in [firmware_and_control.md](docs/firmware_and_control.md) |
 
 ---
 
